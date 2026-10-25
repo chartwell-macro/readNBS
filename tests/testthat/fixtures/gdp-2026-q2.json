@@ -1,0 +1,22 @@
+{
+  "data": [
+    {
+      "code": "202602SS",
+      "name": "2Q 2026",
+      "values": [
+        {
+          "_id": "d22612f09aeb4241bc557ef0ac61b3ba",
+          "value": "361511.1",
+          "du_name": "亿元",
+          "da": "000000000000",
+          "da_name": "National",
+          "catalogid": "28d936104e304aa191e338eb82b6dc09"
+        }
+      ]
+    }
+  ],
+  "success": true,
+  "state": 20000,
+  "message": "成功"
+}
+

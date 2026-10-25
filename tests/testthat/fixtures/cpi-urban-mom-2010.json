@@ -1,0 +1,21 @@
+{
+  "data": [
+    {
+      "code": "201001MM",
+      "name": "Jan 2010",
+      "values": [
+        {
+          "_id": "6752d9f16f7c418a9ab55c21e2b1cd8f",
+          "value": "101.5",
+          "du_name": "%",
+          "da": "000000000000",
+          "da_name": "China",
+          "catalogid": "6d767f323c1b427684637dc1a027cef1"
+        }
+      ]
+    }
+  ],
+  "success": true,
+  "state": 20000,
+  "message": "成功"
+}

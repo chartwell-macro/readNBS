@@ -1,0 +1,32 @@
+Package: readNBS
+Title: Read Official China NBS National Data
+Version: 0.8.3
+Authors@R:
+    person("Chartwell", "Contributors", role = c("aut", "cre"),
+           email = "chartwell@example.invalid")
+Description: A defensive client for official time series from the
+    National Bureau of Statistics of China's National Data portal. It exposes
+    stable semantic series and dimensional dataset identifiers backed by
+    versioned bilingual manifests, while isolating the portal's undocumented
+    UUID-based JSON transport, schema checks, caching, provenance,
+    time-slice stitching, a bundled normalized first-release archive,
+    irregular reference windows, and explicit opt-in regularisation of
+    reported cumulative flows.
+License: MIT + file LICENSE
+URL: https://github.com/chartwell-macro/readNBS
+BugReports: https://github.com/chartwell-macro/readNBS/issues
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Depends:
+    R (>= 4.1.0)
+Imports:
+    data.table,
+    digest,
+    httr2,
+    jsonlite,
+    rvest,
+    xml2
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3

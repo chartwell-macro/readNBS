@@ -1,0 +1,22 @@
+{
+  "data": [
+    {
+      "code": "202512MM",
+      "name": "Dec 2025",
+      "values": [
+        {
+          "_id": "4ae9047687934a6390984c21d6ddab96",
+          "value": "100.8",
+          "du_name": "%",
+          "da": "000000000000",
+          "da_name": "National",
+          "catalogid": "809d2522b0fe4be89142650341b19083"
+        }
+      ]
+    }
+  ],
+  "success": true,
+  "state": 20000,
+  "message": "成功"
+}
+
