@@ -1,0 +1,248 @@
+---
+title: "Getting started with readNBS"
+author: "Chartwell Macro"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started with readNBS}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", width = 88)
+library(readNBS)
+```
+
+`readNBS` is for analysts who need selected official National Bureau of
+Statistics of China (NBS) series and release tables while retaining the
+published reporting geometry and source provenance. The package's supported
+identity is a stable semantic series or dataset ID. Portal UUIDs and request
+paths are transport details held behind local manifests.
+
+This article leads from local discovery through deterministic retrieval and a
+complete time-series chart, then shows where an explicit live request belongs
+in an analysis. Package checks execute the local examples from retained data
+or injected transports; the live section runs only in an interactive session.
+
+## Find a series locally
+
+The bundled scalar catalogue and search index provide local discovery:
+
+```{r search}
+cpi_hits <- nbs_search("CPI", limit = 5L)
+cpi_hits[c("series_id", "title", "frequency", "unit", "route")]
+```
+
+The result is a base `data.frame`. Save `series_id` as the semantic identity;
+portal UUIDs remain transport details managed by the manifest.
+`nbs_catalogue()` returns the same semantic
+metadata without the search filter, and `nbs_manifest()` exposes the
+time-bounded UUID mappings and source notes used by the retrieval layer.
+
+## Retrieve and chart a time series
+
+The package includes versioned, retained official seasonally adjusted revision
+histories. This workflow discovers three comparable month-on-month series,
+fetches them through `nbs_fetch_series()`, and charts the public output
+contract. Retrieval is fully offline. The complete returned rows retain their
+source and vintage fields; the chart keeps only the three columns it needs.
+
+```{r chart-discovery}
+month_on_month <- nbs_search("month-on-month", limit = 50L)
+selected_ids <- c(
+  "NBS/CN/M/FAI/TOTAL/MOM_PERCENT_OFFICIAL_SA",
+  "NBS/CN/M/INDUSTRY/VALUE_ADDED/MOM_PERCENT_OFFICIAL_SA",
+  "NBS/CN/M/RETAIL/TOTAL/MOM_PERCENT_OFFICIAL_SA"
+)
+series_ids <- selected_ids[selected_ids %in% month_on_month$series_id]
+stopifnot(identical(series_ids, selected_ids))
+
+month_on_month[
+  match(series_ids, month_on_month$series_id),
+  c(
+    "series_id", "title", "frequency", "unit", "available_from",
+    "available_to", "route"
+  ),
+  drop = FALSE
+]
+```
+
+The two coverage columns define the supported retrieval window for each exact
+identity. `available_to = NA` denotes an open-ended route, while a date marks a
+bounded retained history or classification era. See the [Data coverage
+article](data-coverage.html) for the complete subject-family map and
+dimensional-dataset inventory.
+
+The retained routes are package data. A strict injected client makes the
+offline boundary visible, while the ordinary parser validates and combines
+the official snapshots. Base R keeps the chart columns, removes non-finite
+values, and trims the repeated title suffix for concise legend labels.
+
+The three histories are the exact IDs shown above. Their installed
+`nbs-fai-sa-history-release-index.csv`,
+`nbs-industry-sa-history-release-index.csv`, and
+`nbs-retail-sa-history-release-index.csv` files record the official NBS source
+URLs and capture hashes for the normalized retained histories.
+
+```{r chart-fetch}
+chart_client <- nbs_client(
+  transport = function(...) stop("The chart example attempted a network request."),
+  retries = 0L,
+  now = function() as.POSIXct("2026-07-29 12:00:00", tz = "UTC")
+)
+
+chart_data <- do.call(rbind, lapply(series_ids, function(series_id) {
+  observations <- nbs_fetch_series(
+    series_id,
+    start = "2024-01",
+    end = "2025-05",
+    client = chart_client
+  )
+  observations[c("date", "value", "title")]
+}))
+
+chart_data <- chart_data[is.finite(chart_data$value), , drop = FALSE]
+chart_data$series <- sub(" month-on-month$", "", chart_data$title)
+utils::head(chart_data[c("date", "value", "series")], 3L)
+```
+
+The plot maps the package's real `date` and `value` columns and a concise
+series label derived from the returned `title`. `ggplot2` is optional; when
+available it renders the figure during vignette and pkgdown builds.
+
+```{r time-series-chart, fig.width=8, fig.height=4.8, out.width="100%", fig.alt="Line chart comparing monthly percent changes in fixed-asset investment, industrial value added, and retail sales from January 2024 to May 2025."}
+if (requireNamespace("ggplot2", quietly = TRUE)) {
+  ggplot2::ggplot(
+    chart_data,
+    ggplot2::aes(x = date, y = value, colour = series, group = series)
+  ) +
+    ggplot2::geom_line() +
+    ggplot2::labs(
+      title = "Selected official NBS month-on-month series",
+      subtitle = "Monthly published observations",
+      x = "Month",
+      y = "Percent",
+      colour = "Series",
+      caption = "Source: National Bureau of Statistics of China."
+    ) +
+    ggplot2::theme_minimal(base_size = 13)
+}
+```
+
+The README uses the same IDs, dates, series labels, and attribution so the
+GitHub home page and this article stay aligned.
+
+## Fetch a fixture-backed current observation
+
+The installed `inst/extdata/examples/cpi-2026-june.json` file is a small,
+source-attributed NBS response snapshot. An injected transport lets the
+ordinary parser exercise the frozen response deterministically:
+
+```{r fixture-fetch}
+fixture_path <- system.file(
+  "extdata", "examples", "cpi-2026-june.json", package = "readNBS"
+)
+stopifnot(nzchar(fixture_path), file.exists(fixture_path))
+fixture_body <- paste(
+  readLines(fixture_path, warn = FALSE, encoding = "UTF-8"),
+  collapse = "\n"
+)
+
+fixture_transport <- function(request) {
+  if (!identical(request$body$dts[[1L]], "202606MM-202606MM")) {
+    stop("The fixture only covers June 2026.")
+  }
+  list(
+    status = 200L,
+    headers = list(`content-type` = "application/json"),
+    body = fixture_body
+  )
+}
+
+client <- nbs_client(
+  transport = fixture_transport,
+  retries = 0L,
+  now = function() as.POSIXct("2026-07-29 12:00:00", tz = "UTC")
+)
+
+cpi <- nbs_fetch_series(
+  "NBS/CN/M/CPI/HEADLINE/YOY_INDEX",
+  start = "2026-06",
+  end = "2026-06",
+  client = client
+)
+cpi[c("period", "value", "raw_value", "unit", "source_vintage")]
+```
+
+The value is an index whose same-month-previous-year base is 100. It is not a
+percentage until the explicit conversion helper is applied. The returned
+frame also carries `source_url`, `raw_sha256`, `manifest_version`, and the
+reporting-period fields needed to audit the observation.
+
+## Read a retained official revision history
+
+Some official seasonally adjusted revision histories are bundled as retained
+source snapshots. They are useful for a fast first success even when no
+transport fixture is needed:
+
+```{r retained-history}
+offline <- nbs_client(
+  transport = function(...) stop("This retained example attempted a network request."),
+  retries = 0L,
+  now = function() as.POSIXct("2026-07-29 12:00:00", tz = "UTC")
+)
+
+activity <- nbs_fetch_series(
+  "NBS/CN/M/INDUSTRY/VALUE_ADDED/MOM_PERCENT_OFFICIAL_SA",
+  start = "2025-04",
+  end = "2025-05",
+  client = offline
+)
+activity[c("period", "value", "source_vintage", "route")]
+```
+
+`route` and `source_vintage` distinguish retained revision snapshots from
+latest/revised portal data. A complete retained range runs entirely offline.
+
+## Fetch current portal data explicitly
+
+The default client uses the official HTTPS portal, bounded per-attempt
+timeouts, bounded retries, and an in-memory cache owned by that client. Public
+NBS routes use anonymous access. This article keeps the live call explicit:
+
+```{r live-request, eval=TRUE}
+if (interactive()) {
+  live_cpi <- nbs_fetch_series(
+    "NBS/CN/M/CPI/HEADLINE/YOY_INDEX",
+    start = "2025-01",
+    end = "2025-12",
+    client = nbs_client(timeout = 15, retries = 2L)
+  )
+  head(live_cpi[c("period", "value", "source_vintage")])
+}
+```
+
+Installation and startup are local operations. A portal fetch may read or
+populate the client's bounded response cache, which can be cleared with
+`nbs_clear_cache(client)`. Cache entries stay in memory and belong to one
+client.
+
+## What to read next
+
+* [Dimensional datasets](dimensional-datasets.html) explains dependent
+  dimensions, valid tuples, and panel retrieval.
+* [Data coverage](data-coverage.html) maps the supported series families,
+  historical starting points, finite archives, and open-ended routes.
+* [Provenance and reporting calendars](provenance-reporting-calendars.html)
+  shows how to preserve source vintages and treat cumulative reporting
+  windows explicitly.
+* [Troubleshooting and live maintenance](troubleshooting-live-maintenance.html)
+  covers changed routes, fixture-driven checks, and the intentionally separate
+  Yearbook maintenance path.
+
+The package is currently distributed as a GitHub development release, and the
+public portal's route contract can evolve. Keep the package version, stable
+ID, requested period, source URL, and provenance fields with any downstream
+result, and check the [NBS attribution
+terms](https://www.stats.gov.cn/english/nbs/200701/t20070104_59236.html) when
+quoting or redistributing data.

@@ -1,0 +1,98 @@
+url: https://chartwell-macro.github.io/readNBS/
+
+template:
+  bootstrap: 5
+
+development:
+  mode: auto
+
+repo:
+  url:
+    home: https://github.com/chartwell-macro/readNBS/
+    source: https://github.com/chartwell-macro/readNBS/blob/main/
+    issue: mailto:chartwellmacro@gmail.com
+    user: https://github.com/
+
+navbar:
+  structure:
+    left: [intro, reference, articles, news]
+    right: [search, github]
+  components:
+    intro:
+      text: Get started
+      href: articles/getting-started.html
+    reference:
+      text: Reference
+      href: reference/index.html
+    articles:
+      text: Articles
+      menu:
+        - text: Getting started
+          href: articles/getting-started.html
+        - text: Data coverage
+          href: articles/data-coverage.html
+        - text: Dimensional datasets
+          href: articles/dimensional-datasets.html
+        - text: Provenance and reporting calendars
+          href: articles/provenance-reporting-calendars.html
+        - text: Troubleshooting and live maintenance
+          href: articles/troubleshooting-live-maintenance.html
+    news:
+      text: Changelog
+      href: news/index.html
+
+articles:
+  - title: Start here
+    navbar: Start here
+    contents:
+      - "getting-started"
+      - "data-coverage"
+  - title: Workflows and maintenance
+    navbar: Workflows
+    contents:
+      - "dimensional-datasets"
+      - "provenance-reporting-calendars"
+      - "troubleshooting-live-maintenance"
+
+reference:
+  - title: readNBS
+    contents:
+      - "readNBS-package"
+  - title: Browse metadata
+    contents:
+      - nbs_manifest
+      - nbs_catalogue
+      - nbs_search
+  - title: Dimensional selection
+    contents:
+      - nbs_dataset_catalogue
+      - nbs_dataset_dimensions
+      - nbs_dataset_valid_tuples
+      - nbs_resolve_dataset_series
+      - nbs_dimension_key
+  - title: Fetch and cache
+    contents:
+      - nbs_client
+      - print.nbs_client
+      - nbs_fetch_series
+      - nbs_fetch_dataset
+      - nbs_clear_cache
+  - title: Transformations
+    contents:
+      - nbs_regularise_monthly
+      - nbs_comparison_index_to_percent
+  - title: Live portal discovery
+    contents:
+      - nbs_tree
+      - nbs_indicators
+  - title: Coverage quality assurance
+    contents:
+      - nbs_historical_coverage
+      - nbs_assert_historical_coverage
+  - title: Yearbook maintenance
+    contents:
+      - nbs_yearbook_targets
+      - nbs_yearbook_discover
+      - nbs_yearbook_routes
+      - nbs_yearbook_parse_table
+      - nbs_yearbook_discover_live

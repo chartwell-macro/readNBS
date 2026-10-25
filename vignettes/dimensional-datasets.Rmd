@@ -1,0 +1,176 @@
+---
+title: "Selecting dimensional NBS datasets"
+author: "Chartwell Macro"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Selecting dimensional NBS datasets}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", width = 88)
+library(readNBS)
+```
+
+Many NBS release panels expose a dataset identity, dimensions, and a finite
+set of combinations actually published by NBS. `readNBS` models those concepts
+separately so selections follow published combinations instead of synthesizing
+unsupported Cartesian products.
+
+## Browse the dataset catalogue
+
+`nbs_dataset_catalogue()` is a local metadata operation. It describes source
+vintage, frequency, expected reporting geometry, and the route used by the
+dataset loader:
+
+```{r catalogue}
+datasets <- nbs_dataset_catalogue("en")
+yearbook_datasets <- datasets[
+  grepl("YEARBOOK", datasets$dataset_id, fixed = TRUE),
+  c("dataset_id", "title", "frequency", "route", "source_vintage"),
+  drop = FALSE
+]
+yearbook_datasets
+```
+
+The catalogue may contain portal-backed panels, retained release tables,
+Yearbook snapshots, and longitudinal collections. The `route` and
+`source_vintage` columns identify local versus portal-backed acquisition paths
+and should be read together.
+
+## Inspect dimensions and valid tuples
+
+For the CPI detail panel, dimensions are represented as rows with machine
+values, display labels, validity dates, units, and semantics:
+
+```{r dimensions}
+cpi_detail <- "NBS/CN/M/CPI/PRICE_DETAIL"
+dimensions <- nbs_dataset_dimensions(cpi_detail, language = "en")
+dimensions[
+  dimensions$dimension %in% c("category", "comparison", "residence"),
+  c("dimension", "value", "label_en", "unit_en", "semantics"),
+  drop = FALSE
+]
+```
+
+The authoritative combinations are returned by
+`nbs_dataset_valid_tuples()`. The `dimension_key` is a canonical, encoded
+representation suitable for joins, caches, or saved specifications:
+
+```{r tuples}
+cpi_tuples <- nbs_dataset_valid_tuples(cpi_detail)
+head(cpi_tuples, 6L)
+
+chosen <- list(
+  category = "headline",
+  comparison = "yoy_index",
+  residence = "national"
+)
+nbs_dimension_key(chosen)
+```
+
+The `dimension_key` is a readable semantic selector suitable for joins,
+caches, logs, or saved specifications; portal UUIDs remain transport
+identifiers.
+
+## Resolve a descriptor before fetching
+
+`nbs_resolve_dataset_series()` checks a filter against the valid tuple table
+and returns the descriptor that will govern a fetch. This is useful when a
+report should record the exact title, unit, source route, and manifest version
+before retrieving observations:
+
+```{r resolve}
+descriptor <- nbs_resolve_dataset_series(cpi_detail, chosen, language = "en")
+descriptor[c(
+  "dataset_id", "dimension_key", "title_en", "unit_en", "frequency",
+  "period_policy", "aggregation_basis", "route", "source_vintage",
+  "manifest_version"
+)]
+```
+
+Invalid combinations produce typed conditions, preserving the published tuple
+contract. For example, a filter containing an unknown category reports:
+
+```{r invalid-filter}
+invalid <- tryCatch(
+  nbs_resolve_dataset_series(
+    cpi_detail,
+    list(
+      category = "not_published",
+      comparison = "yoy_index",
+      residence = "national"
+    )
+  ),
+  error = function(error) {
+    c(class = class(error)[[1L]], message = conditionMessage(error))
+  }
+)
+invalid
+```
+
+`nbs_dataset_valid_tuples()` is the authoritative selector table. Independent
+member lists can create combinations that NBS never published, particularly
+for dependent dimensions, source-table eras, and sparse historical panels.
+
+## Fetch a small retained panel leaf
+
+The following Yearbook dataset is an installed official snapshot. It is a
+small, deterministic panel leaf. The transport guard confirms local execution:
+
+```{r retained-panel}
+yearbook_id <- "NBS/CN/A/YEARBOOK_DEMOGRAPHY_LEGACY"
+yearbook_filters <- list(series = "yb_27885efbbca702a7")
+offline <- nbs_client(
+  transport = function(...) stop("The retained panel attempted a network request."),
+  retries = 0L
+)
+
+population <- nbs_fetch_dataset(
+  yearbook_id,
+  filters = yearbook_filters,
+  client = offline
+)
+population[c(
+  "dataset_id", "series", "value", "period", "source_yearbook",
+  "source_table", "source_url", "source_vintage", "route"
+)]
+```
+
+The returned data frame adds the source-table columns needed by a panel row
+while retaining the common `date`, `period`, reporting-geometry, and
+provenance fields. Treat the Yearbook row as a 2010 vintage and keep it
+distinct from later population communiqué series.
+
+## A panel workflow for live data
+
+The same metadata-first pattern applies to a portal-backed dataset. A live
+operation should be explicit in an application and should keep the requested
+filters and descriptor with the resulting observations:
+
+```{r live-panel, eval=TRUE}
+if (interactive()) {
+  panel_id <- "NBS/CN/M/CPI/PRICE_DETAIL"
+  panel_filters <- list(
+    category = "headline",
+    comparison = "yoy_index",
+    residence = "national"
+  )
+  panel <- nbs_fetch_dataset(
+    panel_id,
+    filters = panel_filters,
+    start = "2025-01",
+    end = "2025-12",
+    client = nbs_client(timeout = 15, retries = 2L)
+  )
+  head(panel[c("period", "value", "unit", "source_vintage")])
+}
+```
+
+The public portal uses anonymous HTTPS access when the network is available.
+The client validates response shape, UUID mapping, and panel cardinality and
+reports typed errors when a source contract changes.
+
+For transformations and source-vintage decisions, continue to
+[Provenance and reporting calendars](provenance-reporting-calendars.html).

@@ -1,0 +1,212 @@
+---
+title: "Troubleshooting and live maintenance"
+author: "Chartwell Macro"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Troubleshooting and live maintenance}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", width = 88)
+library(readNBS)
+```
+
+Use the bundled catalogue, manifests, and retained archives for routine
+workflows. The public NBS portal supports opt-in live catalogue discovery and
+Yearbook maintenance. This article covers diagnostics and deterministic parser
+checks while preserving the package's fail-closed validation.
+
+## Inspect a client before a request
+
+Client construction is local and side-effect free; its printed summary is a
+safe first diagnostic:
+
+```{r client}
+client <- nbs_client(
+  timeout = 15,
+  retries = 0L,
+  cache_max_entries = 16L,
+  cache_ttl = 300
+)
+print(client)
+```
+
+The defaults use HTTPS portal bases. `READNBS_BASE_URL_EN`,
+`READNBS_BASE_URL_ZH`, and the comma-separated `READNBS_OBSERVATION_PATH`
+environment variable can override those bindings at client construction. A
+custom transport is preferable for tests because it is explicit and scoped to
+one client. The cache remains per-client and in memory; clear it with
+`nbs_clear_cache(client)`.
+
+## Use installed response fixtures for deterministic discovery
+
+`nbs_tree()` and `nbs_indicators()` are live operations by default. Installed
+fixtures let their response parsers and provenance attributes be validated
+locally:
+
+```{r tree-fixture}
+tree_file <- system.file(
+  "extdata", "examples", "tree-monthly.json", package = "readNBS"
+)
+tree_transport <- function(request) {
+  stopifnot(identical(request$path, "new/queryIndexTreeAsync"))
+  list(
+    status = 200L,
+    headers = list(`content-type` = "application/json"),
+    body = paste(readLines(tree_file, encoding = "UTF-8", warn = FALSE),
+      collapse = "\n")
+  )
+}
+tree_client <- nbs_client(
+  transport = tree_transport,
+  retries = 0L,
+  now = function() as.POSIXct("2026-07-29 12:00:00", tz = "UTC")
+)
+tree <- nbs_tree(1, client = tree_client)
+tree[c("catalog_uuid", "parent_uuid", "name", "type", "level", "is_leaf")]
+```
+
+The returned tree is a base `data.frame` with `raw_sha256`, `retrieved_at`,
+and `source_url` attributes. Those attributes describe the response body and
+request, while the row columns describe the catalogue node.
+
+```{r indicators-fixture}
+indicators_file <- system.file(
+  "extdata", "examples", "indicators-cpi-2026.json", package = "readNBS"
+)
+indicators_transport <- function(request) {
+  stopifnot(identical(request$path, "new/queryIndicatorsByCid"))
+  list(
+    status = 200L,
+    headers = list(`content-type` = "application/json"),
+    body = paste(
+      readLines(indicators_file, encoding = "UTF-8", warn = FALSE),
+      collapse = "\n"
+    )
+  )
+}
+indicators_client <- nbs_client(
+  transport = indicators_transport,
+  retries = 0L,
+  now = function() as.POSIXct("2026-07-29 12:00:00", tz = "UTC")
+)
+indicators <- nbs_indicators(
+  "5c7452825c7c4dcba391db5ca7f335c5",
+  client = indicators_client
+)
+indicators[c("indicator_uuid", "catalog_uuid", "display_name", "unit")]
+```
+
+When a live response fails, distinguish transport, HTTP, JSON, API, WAF, and
+schema failures in the condition class. Keep stable identities and response
+validation intact while diagnosing the response.
+
+## Diagnose invalid identities and periods
+
+Metadata functions are the safest way to check an identity before making a
+request. An unknown dataset is a typed error rather than an empty result:
+
+```{r typed-error}
+diagnostic <- tryCatch(
+  nbs_dataset_valid_tuples("NBS/CN/M/NOT_A_DATASET"),
+  error = function(error) {
+    c(class = class(error)[[1L]], message = conditionMessage(error))
+  }
+)
+diagnostic
+```
+
+For a real request, check that the stable ID comes from
+`nbs_catalogue()`/`nbs_dataset_catalogue()`, use
+`nbs_dataset_valid_tuples()` for filters, and request a bounded period. Common
+typed conditions include `nbs_unknown_series_error`,
+`nbs_unknown_dataset_error`, `nbs_dataset_filter_error`, `nbs_period_error`,
+`nbs_range_error`, `nbs_manifest_gap_error`, and
+`nbs_dataset_cardinality_error`. A changed portal response can additionally
+produce transport, HTTP, JSON, API, or schema conditions.
+
+## Parse a retained Yearbook route offline
+
+Normal Yearbook parsing works on already acquired local HTML. The contents
+fixture below exercises discovery and target matching:
+
+```{r yearbook-routes}
+index_file <- system.file(
+  "extdata", "examples", "yearbook-2011-left.html", package = "readNBS"
+)
+index_html <- paste(
+  readLines(index_file, encoding = "UTF-8", warn = FALSE),
+  collapse = "\n"
+)
+routes <- nbs_yearbook_routes(
+  index_html,
+  yearbook = 2011,
+  index_url = "https://www.stats.gov.cn/sj/ndsj/2011/left.htm"
+)
+routes[c("source_yearbook", "family", "source_table", "source_url", "schema_era")]
+```
+
+The merged-header table fixture focuses on rowspan/colspan geometry while
+leaving the complete official table outside its scope. The example uses the
+discovered route and overrides only the geometry contract for the fixture:
+
+```{r yearbook-parser}
+table_file <- system.file(
+  "extdata", "examples", "yearbook-table-merged.html", package = "readNBS"
+)
+table_html <- paste(
+  readLines(table_file, encoding = "UTF-8", warn = FALSE),
+  collapse = "\n"
+)
+fixture_route <- routes[routes$source_table == "3-1", , drop = FALSE]
+fixture_route$expected_columns <- 3L
+fixture_route$expected_min_rows <- 4L
+fixture_route$header_rows <- 3L
+parsed <- nbs_yearbook_parse_table(
+  table_html,
+  fixture_route,
+  retrieved_at = as.POSIXct("2026-08-01 00:00:00", tz = "UTC")
+)
+parsed[c(
+  "source_yearbook", "source_table", "reference_year", "measure",
+  "value", "raw_value", "source_url", "raw_sha256"
+)]
+```
+
+Maintainers should compare the real table geometry with the frozen target
+manifest before updating an archive. A live contents-page request is reserved
+for that maintenance workflow:
+
+```{r live-maintenance, eval=TRUE}
+if (interactive()) {
+  discovered <- nbs_yearbook_discover_live(
+    2011,
+    client = nbs_client(timeout = 15, retries = 2L)
+  )
+  head(discovered)
+}
+```
+
+Live discovery returns data for maintainer review. Acquisition and
+normalisation scripts in a source checkout then freeze the document, verify
+its hash, validate the table shape, and review the resulting diff before a
+manifest or archive is changed.
+
+## What to include in a bug report
+
+Email chartwellmacro@gmail.com with:
+
+* package version and R version;
+* stable series or dataset ID, language, date range, and exact filters;
+* the condition class and message;
+* `route`, `source_vintage`, `manifest_version`, and source URL when a result
+  was returned; and
+* a minimal reproducible example using an installed fixture or an injected
+  transport where possible.
+
+Never include passwords, tokens, private URLs, or credentials. See the
+[contributing guide](https://github.com/chartwell-macro/readNBS/blob/main/CONTRIBUTING.md)
+and [security guidance](https://github.com/chartwell-macro/readNBS/blob/main/SECURITY.md)
+for repository support and responsible disclosure.

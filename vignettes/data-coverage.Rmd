@@ -1,0 +1,283 @@
+---
+title: "Data coverage"
+author: "Chartwell Macro"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Data coverage}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", width = 88)
+library(readNBS)
+
+series_coverage <- nbs_catalogue("en")
+dataset_coverage <- nbs_dataset_catalogue("en")
+```
+
+`readNBS` provides a selected, versioned view of official National Bureau of
+Statistics of China (NBS) data. It does not claim to mirror every NBS portal
+series or publication. In package version `r packageVersion("readNBS")`, the
+local metadata describes `r format(nrow(series_coverage), big.mark = ",")`
+scalar-series identities across `r length(unique(series_coverage$family))`
+subject families and `r nrow(dataset_coverage)` dimensional datasets. Those
+dataset manifests enumerate 25,138 exact valid tuples in this version.
+
+Coverage metadata is available without a network request. This article shows
+the supported subject areas and historical starting points, then explains how
+to inspect the exact identity or dimensional tuple used by an analysis.
+
+## Read the coverage fields
+
+For scalar series, `nbs_catalogue()` has one row per stable `series_id`.
+For dimensional data, `nbs_dataset_catalogue()` has one row per `dataset_id`,
+and `nbs_dataset_valid_tuples()` enumerates the combinations that the package
+recognises as published. The central fields are:
+
+* `available_from`: the earliest supported observation for that identity;
+* `available_to`: the final supported observation when the route is bounded;
+  `NA` means that the route is open-ended;
+* `frequency`: annual (`A`), quarterly (`Q`), monthly (`M`), or ten-day
+  (`10D`) reporting geometry; and
+* `route`: the acquisition path, which distinguishes portal-backed series from
+  retained release histories, press tables, and Yearbook snapshots.
+
+An open-ended route supports requests without a fixed terminal date. It does
+not mean that NBS has already published every future period, and it does not
+guarantee that every period between the endpoints contains a non-missing
+value. A finite end date identifies a bounded snapshot, archive, or
+classification era. Always inspect the exact row rather than applying a
+family-wide assumption.
+
+## Scalar-series families
+
+This table is generated from the installed scalar catalogue. “From” is the
+oldest supported start among the identities in that family. “Open-ended” in
+the “To” column means that at least one identity in the family has an
+open-ended route; other identities in the same family can still be bounded.
+
+```{r scalar-family-table, echo=FALSE}
+family_labels <- c(
+  capacity_utilisation = "Capacity utilisation",
+  cpi = "Consumer prices (CPI)",
+  employment = "Employment",
+  energy = "Energy",
+  fai = "Fixed-asset investment",
+  gdp = "GDP",
+  households = "Household income and consumption",
+  industrial_enterprises = "Industrial enterprises",
+  industrial_portal = "Industrial detailed portal series",
+  industry = "Industrial value added",
+  migrant_workers = "Migrant workers",
+  output = "Industrial and energy output",
+  pmi = "Purchasing managers' indexes (PMI)",
+  population = "Population and demographics",
+  ppi = "Producer prices (PPI)",
+  ppirm = "Purchasing prices (PPIRM)",
+  property = "Property development",
+  retail = "Retail sales",
+  services = "Services production",
+  unemployment = "Surveyed unemployment"
+)
+frequency_labels <- c(A = "Annual", M = "Monthly", Q = "Quarterly")
+
+family_coverage <- do.call(
+  rbind,
+  lapply(names(family_labels), function(family) {
+    rows <- series_coverage[series_coverage$family == family, , drop = FALSE]
+    finite_to <- rows$available_to[!is.na(rows$available_to)]
+    data.frame(
+      Area = unname(family_labels[[family]]),
+      Series = format(nrow(rows), big.mark = ","),
+      Frequency = paste(
+        unname(frequency_labels[sort(unique(rows$frequency))]),
+        collapse = ", "
+      ),
+      From = as.character(min(as.Date(rows$available_from))),
+      To = if (any(is.na(rows$available_to))) {
+        "Open-ended"
+      } else {
+        as.character(max(as.Date(finite_to)))
+      },
+      check.names = FALSE,
+      stringsAsFactors = FALSE
+    )
+  })
+)
+
+knitr::kable(family_coverage, align = c("l", "r", "l", "l", "l"))
+```
+
+The family counts include individual industrial, regional, product, and other
+dimensional leaves that have scalar semantic IDs. Use a text search to narrow
+the catalogue, then retain the coverage fields with the chosen identity:
+
+```{r inspect-scalar-coverage}
+population <- nbs_search("population", limit = 100L)
+population_coverage <- population[
+  , c(
+    "series_id", "title", "frequency", "available_from", "available_to",
+    "route"
+  )
+]
+utils::head(population_coverage, 6L)
+```
+
+For a known family, inspect every supported identity directly:
+
+```{r filter-scalar-family}
+cpi_coverage <- nbs_catalogue("en")
+cpi_coverage <- cpi_coverage[
+  series_coverage$family == "cpi",
+  c(
+    "series_id", "title", "frequency", "available_from", "available_to",
+    "route"
+  )
+]
+nrow(cpi_coverage)
+utils::head(cpi_coverage, 5L)
+```
+
+## Dimensional datasets and historical extensions
+
+The 39 dimensional datasets cover exact published combinations rather than an
+assumed Cartesian product. Their source paths include live portal panels,
+retained press tables, longitudinal series, and six 2011 Yearbook bridges.
+The following package-generated selection highlights the longest and most
+useful historical paths; it is not a substitute for the complete catalogue.
+
+```{r historical-dataset-table, echo=FALSE}
+historical_ids <- c(
+  "NBS/CN/A/DEMOGRAPHY/LONGITUDINAL",
+  "NBS/CN/M/RETAIL_SALES/DETAIL",
+  "NBS/CN/M/PROPERTY_DEVELOPMENT/NATIONAL",
+  "NBS/CN/M/INDUSTRIAL_BENEFITS/BY_ENTERPRISE_TYPE",
+  "NBS/CN/M/PPI/PRICE_DETAIL",
+  "NBS/CN/Q/HOUSEHOLDS/INCOME_CONSUMPTION",
+  "NBS/CN/A/MIGRANT_WORKERS/LONGITUDINAL",
+  "NBS/CN/A/WAGES/LONGITUDINAL",
+  "NBS/CN/A/INDUSTRIAL_CAPACITY_UTILISATION/NATIONAL_HISTORY",
+  "NBS/CN/Q/INDUSTRIAL_CAPACITY_UTILISATION/NATIONAL_HEADLINE_2017_2019",
+  "NBS/CN/10D/PRODUCTION_MARKET_PRICES",
+  "NBS/CN/A/YEARBOOK_DEMOGRAPHY_LEGACY"
+)
+historical_rows <- dataset_coverage[
+  match(historical_ids, dataset_coverage$dataset_id),
+  c("title", "frequency", "available_from", "available_to", "route"),
+  drop = FALSE
+]
+stopifnot(!anyNA(historical_rows$title))
+names(historical_rows) <- c("Dataset", "Frequency", "From", "To", "Route")
+historical_rows$From <- as.character(historical_rows$From)
+historical_rows$To <- as.character(historical_rows$To)
+historical_rows$To[is.na(historical_rows$To)] <- "Open-ended"
+knitr::kable(historical_rows, align = c("l", "l", "l", "l", "l"))
+```
+
+The dates in `nbs_dataset_catalogue()` are dataset-level envelopes. Exact tuple
+windows can differ: for example, the retail detail dataset has a 1990 envelope
+because of its longest underlying history, while some of its leaves begin in
+2000. Industrial-enterprise datasets likewise span several classification
+eras with different starting points. Use tuple-level coverage for a final
+selection.
+
+Retrieve the complete dataset inventory with:
+
+```{r inspect-dataset-coverage}
+dataset_inventory <- nbs_dataset_catalogue("en")[
+  , c(
+    "dataset_id", "title", "frequency", "available_from", "available_to",
+    "route"
+  )
+]
+nrow(dataset_inventory)
+utils::head(dataset_inventory, 6L)
+```
+
+Before selecting a panel, enumerate its exact valid tuples. This example is
+local and deterministic:
+
+```{r inspect-valid-tuples}
+cpi_tuples <- nbs_dataset_valid_tuples("NBS/CN/M/CPI/PRICE_DETAIL")
+nrow(cpi_tuples)
+utils::head(cpi_tuples, 4L)
+```
+
+`nbs_resolve_dataset_series()` then validates one selected combination and
+returns its stable scalar identity and source metadata. Unsupported Cartesian
+combinations fail with a typed condition rather than silently selecting a
+different series.
+
+## Acquisition routes
+
+Most scalar identities are portal-backed: 11,137 use
+`portal_uuid_series`, while three retained official revision histories use
+`press_revision_table`. Dimensional coverage combines the following declared
+paths:
+
+```{r dataset-route-table, echo=FALSE}
+route_meaning <- c(
+  portal_uuid_panel = "Portal-backed dimensional panel",
+  portal_uuid_plus_press = "Portal panel with retained press coverage",
+  portal_uuid_tree_plus_press = "Portal tree with retained press coverage",
+  press_html_table = "Retained official HTML table",
+  press_release_table = "Retained official release table",
+  retained_longitudinal_series = "Retained longitudinal series",
+  yearbook_snapshot = "Retained Yearbook snapshot"
+)
+route_counts <- table(dataset_coverage$route)
+route_rows <- data.frame(
+  Route = names(route_meaning),
+  Datasets = as.integer(route_counts[names(route_meaning)]),
+  Meaning = unname(route_meaning),
+  stringsAsFactors = FALSE
+)
+knitr::kable(route_rows, align = c("l", "r", "l"))
+```
+
+The exact row's `route`, `source_vintage`, `source_url`, and hash fields state
+whether retrieval is live or retained and identify the source material used.
+
+## Run the exact coverage audit
+
+`nbs_historical_coverage()` joins the scalar manifest, all valid dimensional
+tuples, schema eras, and required-history policies. It returns one row for each
+scalar series or exact dataset tuple, with `available_from`, `available_to`,
+`required_from`, `status`, `schema_era`, `policy_id`, and `authority` kept
+together. The audit is entirely local but can take several minutes, so it is
+best suited to release validation or an explicit analysis check:
+
+```{r complete-coverage-audit, eval=FALSE}
+coverage <- nbs_historical_coverage()
+table(coverage$entity_type, coverage$status)
+
+nbs_assert_historical_coverage()
+```
+
+The version 0.8.3 release audit contains 36,278 rows: 11,140 scalar identities
+and 25,138 exact dataset tuples. All rows satisfy their declared historical
+coverage policy; 1,268 have open-ended routes. A clean run took about 95
+seconds on the release-validation machine, so documentation builds do not run
+it automatically.
+
+Use the family and dataset catalogues for quick interactive discovery. Use the
+full audit when you need to establish that every supported identity satisfies
+the package's historical-coverage policy.
+
+## Scope and interpretation
+
+Coverage dates describe the package's supported semantic and source paths;
+they are not a statistical claim that concepts are comparable across all
+years. Classification changes, release vintages, period geometry, suppression,
+and missing observations remain explicit in returned columns. Longitudinal
+datasets join eras only where the package has documented compatible concepts;
+classification-specific datasets remain available when a single joined series
+would be misleading.
+
+Portal-backed routes retrieve current or revised official values and require
+network availability. Retained histories and snapshots are deterministic local
+paths whose finite coverage reflects their captured source material. The
+package's MIT licence covers package code and prose, not NBS-derived data or
+official publications; consult the source attribution and rights guidance
+before redistribution.

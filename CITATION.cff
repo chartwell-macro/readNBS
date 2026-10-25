@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use readNBS, please cite it."
+title: "readNBS: Access Data from China's National Bureau of Statistics"
+type: software
+version: 0.8.3
+repository-code: "https://github.com/chartwell-macro/readNBS"
+license: MIT
+abstract: >-
+  Package-authored code and prose documentation are MIT-licensed and copyright
+  Chartwell Macro. NBS-derived data, source materials, and rendered official-source
+  values retain their source rights and are not relicensed by the package.
+authors:
+  - given-names: Chartwell
+    family-names: Macro

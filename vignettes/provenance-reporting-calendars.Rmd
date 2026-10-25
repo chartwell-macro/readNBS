@@ -1,0 +1,168 @@
+---
+title: "Provenance and reporting calendars"
+author: "Chartwell Macro"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Provenance and reporting calendars}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", width = 88)
+library(readNBS)
+```
+
+Identify each NBS value with its reporting window, source vintage, release URL,
+retrieval or archive hash, and classification or aggregation boundary.
+`readNBS` keeps those fields explicit so analyses preserve source geometry
+across releases and incompatible source tables remain distinct.
+
+## Read the manifest behind a scalar ID
+
+`nbs_manifest()` is local metadata. Its rows map a supported semantic ID to a
+time-bounded transport slice and record the source contract used by the
+parser:
+
+```{r manifest}
+manifest <- nbs_manifest()
+cpi_slices <- manifest[
+  manifest$series_id == "NBS/CN/M/CPI/HEADLINE/YOY_INDEX",
+  c(
+    "series_id", "slice_start", "slice_end", "classification_id",
+    "period_policy", "aggregation_basis", "source_url", "source_note"
+  ),
+  drop = FALSE
+]
+cpi_slices
+```
+
+The stable `series_id` is the supported user identity. The manifest maps
+transport UUIDs to stable semantic IDs and validates coverage changes.
+
+## Preserve source dates and vintages
+
+This retained property release series is an entirely local example. The
+transport guard ensures that the selected 2020 range is read from the
+bundled first-release archive:
+
+```{r retained-observations}
+property_id <- "NBS/CN/M/PROPERTY_DEVELOPMENT/NATIONAL"
+property_filters <- list(
+  series_id = "NBS/CN/M/PROPERTY/FUNDING/DEPOSITS_ADVANCE_RECEIPTS/YTD_LEVEL"
+)
+offline <- nbs_client(
+  transport = function(...) stop("The retained archive attempted a network request."),
+  retries = 0L
+)
+
+property <- nbs_fetch_dataset(
+  property_id,
+  filters = property_filters,
+  start = "2020-02",
+  end = "2020-04",
+  client = offline
+)
+
+property[c(
+  "series_id", "period", "value", "unit", "reference_period_start",
+  "reference_period_end", "aggregation_basis", "period_policy",
+  "release_date", "vintage_date", "source_vintage", "source_url",
+  "raw_sha256"
+)]
+```
+
+Here `period` identifies the reported observation, while
+`reference_period_start` and `reference_period_end` show that the February
+observation covers January--February. `release_date` and `vintage_date`
+describe the source, while `retrieved_at` records the package read and is `NA`
+for this retained local read. Keep the source unit of 100 million yuan explicit
+before applying a monthly-flow transformation.
+
+## Make the reporting calendar explicit
+
+For additive year-to-date levels, `nbs_regularise_monthly()` is an opt-in
+analytical benchmark. It assigns half of the combined January--February value
+to each month by default and differences subsequent cumulative observations.
+The result is labelled as derived and retains the source periods and hashes:
+
+```{r regularise}
+monthly <- nbs_regularise_monthly(property)
+monthly[c(
+  "series_id", "period", "value", "unit", "derived_method",
+  "source_observation_periods", "source_omitted_observation_periods",
+  "source_vintage", "route"
+)]
+```
+
+The January and February values are labelled derived accounting benchmarks and
+remain distinct from official monthly observations. Use `working_day_share`
+only with an independently verified calendar supplied through `working_days`;
+rates, indexes, stocks, and incomplete cumulative series remain outside this
+transformation.
+
+## Convert a comparison index explicitly
+
+NBS often publishes comparisons as an index with a base of 100. For a
+same-month-previous-year index, the year-on-year percentage change is exactly
+the index minus 100. The following uses the installed response snapshot, so
+it remains offline while exercising the same parser used for a portal call:
+
+```{r comparison-index}
+fixture_path <- system.file(
+  "extdata", "examples", "cpi-2026-june.json", package = "readNBS"
+)
+fixture_body <- paste(
+  readLines(fixture_path, warn = FALSE, encoding = "UTF-8"),
+  collapse = "\n"
+)
+fixture_transport <- function(request) {
+  list(
+    status = 200L,
+    headers = list(`content-type` = "application/json"),
+    body = fixture_body
+  )
+}
+fixture_client <- nbs_client(
+  transport = fixture_transport,
+  retries = 0L,
+  now = function() as.POSIXct("2026-07-29 12:00:00", tz = "UTC")
+)
+cpi <- nbs_fetch_series(
+  "NBS/CN/M/CPI/HEADLINE/YOY_INDEX",
+  start = "2026-06",
+  end = "2026-06",
+  client = fixture_client
+)
+comparison <- nbs_comparison_index_to_percent(cpi)
+comparison[c(
+  "period", "value", "source_index_value", "raw_value", "unit",
+  "derived_method", "source_raw_sha256"
+)]
+```
+
+The input is unchanged, the original index remains in `source_index_value`
+and `raw_value`, and the derived method is recorded. This helper records the
+index-minus-100 identity; seasonal adjustment and rebasing remain separate
+workflows.
+
+## Keep provenance in downstream files
+
+For a report or model input, save at least:
+
+* the stable `series_id` or `dataset_id` and canonical `dimension_key`;
+* requested and returned `period` values plus the reference-period fields;
+* `source_vintage`, `data_status`, release and vintage dates;
+* `source_url`, `source_note`, `raw_sha256`, and `source_raw_sha256`; and
+* `manifest_version`, `parser_version`, `package_version`, and any
+  `derived_method`.
+
+Retained press and Yearbook rows preserve a labelled release vintage. Portal
+rows describe the latest/revised database state returned at fetch time. These
+are different source contracts even when their titles look similar. NBS
+classification, base-period, and coverage breaks remain visible in the
+`series_note` fields. Combine eras only through an explicit, documented
+mapping.
+
+For a practical way to inspect an exact panel selector before choosing its
+source, see [Selecting dimensional NBS datasets](dimensional-datasets.html).

@@ -1,0 +1,33 @@
+# R and IDE session state
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+*.Rproj
+.DS_Store
+
+# Package builds and R CMD check output
+*.tar.gz
+*.Rcheck/
+.Rcheck/
+check/
+
+# Locally rendered package sites and documentation output.  Keep the Rmd
+# sources, vignettes, and generated man pages under version control.
+docs/
+_site/
+README.html
+vignettes/*.html
+vignettes/*.pdf
+
+# Local coverage, profiling, and benchmark results
+coverage/
+covr/
+profvis/
+benchmarks/results/
+benchmarks/*.rds
+work/
+
+# Local package libraries
+local-lib/
+renv/library/

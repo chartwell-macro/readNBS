@@ -1,0 +1,22 @@
+{
+  "data": [
+    {
+      "code": "202601MM",
+      "name": "Jan 2026",
+      "values": [
+        {
+          "_id": "53180dfb9c14411ba4b762307c85920c",
+          "value": "100.2",
+          "du_name": "%",
+          "da": "000000000000",
+          "da_name": "National",
+          "catalogid": "5c7452825c7c4dcba391db5ca7f335c5"
+        }
+      ]
+    }
+  ],
+  "success": true,
+  "state": 20000,
+  "message": "成功"
+}
+

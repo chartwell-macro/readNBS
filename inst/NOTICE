@@ -1,0 +1,34 @@
+Third-party and source-data notice for readNBS
+================================================
+
+Package code and authored documentation
+---------------------------------------
+
+Package-authored code and prose documentation are copyright Chartwell Macro and are
+distributed under the MIT License declaration in DESCRIPTION and the copyright
+record in the top-level LICENSE file.
+
+National Bureau of Statistics of China material
+------------------------------------------------
+
+The installed package includes selected source-derived metadata, normalized
+published cells, rendered official-source values, and small examples from the
+National Bureau of Statistics of China (NBS). The repository also retains HTML/XML/CSV source captures for
+maintenance and audit purposes; repository-only captures are excluded from a
+built source package. These data and source materials are not relicensed under
+the MIT License. Their source-page terms, attribution requirements, and any
+other applicable conditions remain applicable. Consult the current NBS terms
+before redistributing the data or source captures:
+
+https://www.stats.gov.cn/english/nbs/200701/t20070104_59236.html
+
+When quoting or reprinting values, attribute the source prominently, for
+example:
+
+Source: National Bureau of Statistics of China | https://data.stats.gov.cn/
+
+readNBS is an independent package and is not produced, sponsored, endorsed,
+or supported by NBS. NBS names, marks, portal content, and official source
+pages remain the responsibility of their respective owner. This notice does
+not grant permission to use NBS branding or imply that the package is an
+official or supported NBS API client.

@@ -1,0 +1,28 @@
+^readNBS\.Rproj$
+^\.Rproj\.user$
+^\.git$
+^\.github$
+^\.codex$
+^\.agents$
+^_pkgdown\.yml$
+^pkgdown$
+^pkgdown/
+^CITATION\.cff$
+^README\.Rmd$
+^cran-comments\.md$
+^(?:CONTRIBUTING|SECURITY|SUPPORT)\.md$
+^docs$
+^docs/
+^scripts$
+^scripts/
+^work$
+^work/
+^outputs$
+^outputs/
+^(?:site|check|checks|benchmark|benchmarks|tarballs?)$
+^(?:site|check|checks|benchmark|benchmarks|tarballs?)/
+# Raw NBS captures are maintainer audit inputs. Normalized archives, manifests,
+# coverage policy, and the small public examples under inst/extdata remain in
+# the source tarball.
+^inst/extdata/nbs-(?:capacity-history|demography-history|fai-sa-history|households-legacy|industry-sa-history|migrant-history|retail-sa-history|tenday-history|wages-history|yearbook)(?:/|$)
+^inst/extdata/nbs-yearbook-snapshot-index\.csv$

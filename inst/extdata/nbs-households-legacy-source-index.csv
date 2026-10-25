@@ -1,0 +1,5 @@
+"dataset_id","release_period","residence","source_table","source_url","source_capture_sha256"
+"NBS/CN/A/HOUSEHOLDS/URBAN_LEGACY_2011_2012","2011","urban","10-5","https://www.stats.gov.cn/sj/ndsj/2012/html/J1005C.HTM","242975112a22d738a42c2f38c7c48b9f5d1c2d74f32104c02e15c4d597aea1e5"
+"NBS/CN/A/HOUSEHOLDS/URBAN_LEGACY_2011_2012","2012","urban","11-4","https://www.stats.gov.cn/sj/ndsj/2013/html/Z1104C.xls","b4b0056afab30414b6a3f5a06f2cd30500b0eaa636a7de452fe303244e298071"
+"NBS/CN/A/HOUSEHOLDS/RURAL_LEGACY_2011_2012","2011","rural","10-18","https://www.stats.gov.cn/sj/ndsj/2012/html/J1018C.HTM","f565526823b783f32f936be1946cb9ce90d3bf0b226f1829e4e84920405a1b3c"
+"NBS/CN/A/HOUSEHOLDS/RURAL_LEGACY_2011_2012","2012","rural","11-17","https://www.stats.gov.cn/sj/ndsj/2013/html/Z1117C.xls","fb57a6edf5787b1b67ab5b6485038e9093808ad7c1ff875f70197cfe18040ea7"

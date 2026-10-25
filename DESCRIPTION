@@ -1,0 +1,39 @@
+Package: readNBS
+Title: Access Data from China's National Bureau of Statistics
+Version: 0.8.3
+Authors@R:
+    person(
+      given = "Chartwell", family = "Macro", email = "chartwellmacro@gmail.com",
+      role = c("aut", "cre", "cph")
+    )
+Description: Provides a defensive client for selected time series and release
+    tables from the National Bureau of Statistics of China (NBS). It exposes
+    stable semantic identifiers and dimensional dataset descriptors backed by
+    versioned bilingual manifests, while isolating the portal's undocumented
+    UUID-based JSON transport, schema checks, bounded per-client caching, and
+    provenance. Bundled normalized first-release archives support deterministic
+    access to historical press tables, and explicit helpers preserve reporting
+    calendars and optionally regularise cumulative flows without silently
+    changing the published observations.
+License: MIT + file LICENSE
+URL: https://chartwell-macro.github.io/readNBS/, https://github.com/chartwell-macro/readNBS
+BugReports: mailto:chartwellmacro@gmail.com
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Depends:
+    R (>= 4.1.0)
+Imports:
+    data.table,
+    digest,
+    httr2,
+    jsonlite,
+    rvest,
+    xml2
+Suggests:
+    ggplot2,
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0)
+VignetteBuilder: knitr
+Config/testthat/edition: 3

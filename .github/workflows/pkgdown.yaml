@@ -1,0 +1,148 @@
+name: pkgdown
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pkgdown-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  READNBS_TEST_OFFLINE: "true"
+  READNBS_LIVE_TESTS: "false"
+
+jobs:
+  build:
+    name: Build and inspect site
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::ggplot2, any::pkgdown, local::.
+          needs: website
+
+      - name: Verify README source is synchronized
+        run: |
+          Rscript --vanilla -e 'rmarkdown::render("README.Rmd", output_format = "github_document", quiet = TRUE)'
+          git diff --exit-code -- README.md
+
+      - name: Build site in a disposable checkout
+        id: build_site
+        shell: bash
+        run: |
+          build_root="$(mktemp -d)"
+          git archive --format=tar --prefix=readNBS/ HEAD | tar -x -C "$build_root"
+          cd "$build_root/readNBS"
+          Rscript --vanilla - <<'RSCRIPT'
+          site_dir <- "pkgdown-site"
+          pkgdown::build_site(
+            override = list(destination = site_dir),
+            new_process = FALSE,
+            install = TRUE,
+            preview = FALSE,
+            quiet = FALSE
+          )
+          pkgdown::check_pkgdown(".")
+
+          html <- list.files(site_dir, pattern = "[.]html$", recursive = TRUE,
+                             full.names = TRUE)
+          required <- file.path(site_dir, "index.html")
+          if (!all(file.exists(required))) {
+            stop("pkgdown did not create the package home page.", call. = FALSE)
+          }
+          if (!any(grepl("^pkgdown-site/reference/", html)) ||
+              !any(grepl("^pkgdown-site/articles/", html))) {
+            stop("pkgdown output is missing reference pages or articles.", call. = FALSE)
+          }
+
+          home <- xml2::read_html(file.path(site_dir, "index.html"))
+          title <- xml2::xml_text(xml2::xml_find_first(home, "//title"))
+          if (!grepl("readNBS", title, fixed = TRUE)) {
+            stop("pkgdown home page has no readNBS title.", call. = FALSE)
+          }
+          viewport <- xml2::xml_find_all(home, "//meta[@name='viewport']")
+          if (!length(viewport)) {
+            stop("pkgdown home page has no responsive viewport metadata.", call. = FALSE)
+          }
+          message("Inspected pkgdown output: ", length(html), " HTML files")
+          RSCRIPT
+          echo "site_path=$build_root/readNBS/pkgdown-site" >> "$GITHUB_OUTPUT"
+
+      - name: Upload inspected site
+        uses: actions/upload-artifact@v7
+        with:
+          name: readNBS-pkgdown-site
+          path: ${{ steps.build_site.outputs.site_path }}
+          if-no-files-found: error
+
+  deploy:
+    name: Deploy GitHub Pages site
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: pkgdown-pages-main
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::ggplot2, any::pkgdown, local::.
+          needs: website
+
+      - name: Build GitHub Pages site
+        run: |
+          pkgdown::build_site(
+            override = list(destination = "pkgdown-site"),
+            new_process = FALSE,
+            install = FALSE,
+            preview = FALSE
+          )
+        shell: Rscript {0}
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: pkgdown-site
+
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

@@ -1,0 +1,56 @@
+name: test-coverage
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-coverage-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  R_KEEP_PKG_SOURCE: yes
+  READNBS_TEST_OFFLINE: "true"
+  READNBS_LIVE_TESTS: "false"
+
+jobs:
+  coverage:
+    name: Ubuntu release coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::covr
+          needs: coverage
+
+      - name: Run fixture-backed test coverage
+        run: |
+          Rscript --vanilla - <<'RSCRIPT'
+          coverage <- covr::package_coverage()
+          print(coverage)
+          message("Total coverage: ", covr::percent_coverage(coverage), "%")
+          covr::to_cobertura(coverage, "coverage.xml")
+          RSCRIPT
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v7
+        with:
+          name: readNBS-coverage
+          path: coverage.xml
+          if-no-files-found: error
